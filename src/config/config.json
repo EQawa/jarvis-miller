@@ -1,0 +1,13 @@
+{
+    "Agent":
+    {
+        "Name": "Jarvis Miller"
+    },
+    "GitHub":
+    {
+        "URL": "https://github.com/EQawa/sandbox-for-jarvis.git",
+        "Email": "Jarvis.Miller@gmx.de",
+        "Password": "Jarvis",
+        "SSH-KeyLocation": "/home/awa/.ssh/id_ed25519"
+    }
+}
