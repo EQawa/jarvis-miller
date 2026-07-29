@@ -6,7 +6,7 @@ class PromptBuilder:
     def __init__(self):
 
         self.system_prompt = Path(
-            "../prompts/system_prompt.txt"
+            "src/prompts/system_prompt.txt"
         ).read_text(
             encoding="utf-8"
         )
