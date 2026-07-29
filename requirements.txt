@@ -1,0 +1,9 @@
+PyGithub
+GitPython
+ollama
+python-dotenv
+sqlalchemy
+apscheduler
+pydantic
+requests
+rich
