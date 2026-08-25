@@ -1,9 +1,17 @@
+from pathlib import Path
+
 from .conversation import Conversation, Chat
+from .repository import Repository
 
 
 class MemoryHandler:
-    def __init__(self):
+    def __init__(self, repository_path: str | Path):
         self.conversation = Conversation()
+        self.repository = Repository(repository_path)
+
+    # ------------------------------------------------------------------
+    # Conversation
+    # ------------------------------------------------------------------
 
     def create_chat(self, ticket_nr: int) -> Chat:
         return self.conversation.create_chat(ticket_nr)
@@ -15,5 +23,9 @@ class MemoryHandler:
 
         return None
 
-    def get_conversation(self) -> Conversation:
-        return self.conversation
+    # ------------------------------------------------------------------
+    # Repository
+    # ------------------------------------------------------------------
+
+    def get_repository(self) -> Repository:
+        return self.repository

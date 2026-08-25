@@ -6,6 +6,7 @@ from src.git_tools.git_client import GitClient
 from src.github_api.github_client import GitHubClient
 from src.llm.ollama_client import OllamaClient
 from src.llm.prompt_builder import PromptBuilder
+from src.history.memory_handler import MemoryHandler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +30,8 @@ def main():
         model=settings.OLLAMA_MODEL
     )
     prompt_builder = PromptBuilder()
+    memory_handler = MemoryHandler(settings.REPOSITORY_PATH)
+    memory_handler.get_repository().print_repo()
 
     while True:
 
