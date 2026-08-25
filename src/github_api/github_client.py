@@ -10,7 +10,7 @@ class GitHubClient:
         bot_username: str
     ):
         with open(token_path, "r") as f:
-            token = f.read()
+            token = f.read().strip()
 
         self.github = Github(token)
 
