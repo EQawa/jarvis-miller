@@ -2,12 +2,13 @@ from pathlib import Path
 
 from .conversation import Conversation, Chat
 from .repository import Repository
+from src.llm.ollama_client import OllamaClient
 
 
 class MemoryHandler:
-    def __init__(self, repository_path: str | Path):
+    def __init__(self, repository_path: str | Path, ollama_client: OllamaClient):
         self.conversation = Conversation()
-        self.repository = Repository(repository_path)
+        self.repository = Repository(repository_path, ollama_client)
 
     # ------------------------------------------------------------------
     # Conversation

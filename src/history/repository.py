@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
+from src.llm.ollama_client import OllamaClient
+
 
 
 SUPPORTED_EXTENSIONS = {
@@ -36,12 +38,46 @@ class Function:
     function_body: str
     function_summary: str | None = None
 
+    def create_summary(self, ollama_client: OllamaClient):
+        prompt = f"""
+        Summarize the following Python function in a maximum of 15 words. 
+        Describe only what the function does. No introduction. No Markdown formatting. 
+        Function: {self.function_body}
+        """ 
+        self.function_summary = ollama_client.generate(prompt) 
+        return self.function_summary
+
 
 @dataclass
 class Class:
     class_name: str
     class_methods: list[Function] = field(default_factory=list)
     class_summary: str | None = None
+
+    def create_summary(self, ollama_client: OllamaClient):
+        methods = "\n".join(
+            f"- {method.function_header}: {method.function_summary}"
+            for method in self.class_methods
+            if method.function_summary
+        )
+
+        prompt = f"""
+Summarize the following Python class in a maximum of 20 words.
+
+Briefly describe the responsibility of the class.
+No introduction.
+No Markdown formatting.
+
+Class name:
+{self.class_name}
+
+Methods:
+{methods}
+"""
+
+        self.class_summary = ollama_client.generate(prompt)
+
+        return self.class_summary
 
 
 @dataclass
@@ -122,6 +158,44 @@ class File:
             function_header=lines[start],
             function_body=function_body
         )
+    
+    def create_summary(self, ollama_client: OllamaClient):
+        classes = "\n".join(
+            f"- {class_.class_name}: {class_.class_summary}"
+            for class_ in self.file_classes
+            if class_.class_summary
+        )
+
+        functions = "\n".join(
+            f"- {function.function_header}: "
+            f"{function.function_summary}"
+            for function in self.functions
+            if function.function_summary
+        )
+
+        prompt = f"""
+Summarize the following Python file in a maximum of 30 words.
+
+Describe the main purpose of the file and its most important responsibilities.
+No introduction.
+No Markdown formatting.
+
+File name:
+{self.file_path.name}
+
+Imports:
+{self.file_imports}
+
+Classes:
+{classes}
+
+Functions:
+{functions}
+"""
+
+        self.file_summary = ollama_client.generate(prompt)
+
+        return self.file_summary
 
 
 @dataclass
@@ -157,11 +231,46 @@ class Folder:
                 self.files.append(
                     File(path)
                 )
+    
+    def create_summary(self, ollama_client: OllamaClient):
+        files = "\n".join(
+            f"- {file.file_path.name}: {file.file_summary}"
+            for file in self.files
+            if file.file_summary
+        )
 
+        folders = "\n".join(
+            f"- {folder.folder_path.name}/: "
+            f"{folder.folder_summary}"
+            for folder in self.folders
+            if folder.folder_summary
+        )
+
+        prompt = f"""
+Summarize the following project folder in a maximum of 30 words.
+
+Describe its main responsibility and what kind of code it contains.
+No introduction.
+No Markdown formatting.
+
+Folder:
+{self.folder_path.name}
+
+Files:
+{files}
+
+Subfolders:
+{folders}
+"""
+
+        self.folder_summary = ollama_client.generate(prompt)
+
+        return self.folder_summary
 
 class Repository:
-    def __init__(self, repository_path: Path | str):
+    def __init__(self, repository_path: Path | str, ollama_client: OllamaClient):
         self.repository_path = Path(repository_path).resolve()
+        self.ollama_client = ollama_client
 
         self.files: list[File] = []
         self.folders: list[Folder] = []
@@ -198,18 +307,23 @@ class Repository:
 
                 self.files.append(File(path))
 
-    def print_repo(self, functions: bool = False):
+    def print_repo(
+        self,
+        functions: bool = False,
+        summaries: bool = False
+    ):
         print(self.repository_path.name)
 
-        # Dateien direkt im Repository
+        # Files directly in the repository
         for file in self.files:
             self._print_file(
                 file=file,
                 prefix="├── ",
-                functions=functions
+                functions=functions,
+                summaries=summaries
             )
 
-        # Ordner im Repository
+        # Folders in the repository
         for index, folder in enumerate(self.folders):
             is_last = index == len(self.folders) - 1
 
@@ -217,15 +331,18 @@ class Repository:
                 folder=folder,
                 prefix="",
                 is_last=is_last,
-                functions=functions
+                functions=functions,
+                summaries=summaries
             )
+
 
     def _print_folder(
         self,
         folder: Folder,
         prefix: str,
         is_last: bool,
-        functions: bool
+        functions: bool,
+        summaries: bool
     ):
         connector = "└── " if is_last else "├── "
 
@@ -233,11 +350,16 @@ class Repository:
             f"{prefix}{connector}{folder.folder_path.name}/"
         )
 
+        if summaries and folder.folder_summary:
+            print(
+                f"{prefix}    Summary: {folder.folder_summary}"
+            )
+
         child_prefix = prefix + (
             "    " if is_last else "│   "
         )
 
-        # Dateien
+        # Files
         for index, file in enumerate(folder.files):
             is_last_file = (
                 index == len(folder.files) - 1
@@ -248,10 +370,11 @@ class Repository:
                 file=file,
                 prefix=child_prefix,
                 connector="└── " if is_last_file else "├── ",
-                functions=functions
+                functions=functions,
+                summaries=summaries
             )
 
-        # Unterordner
+        # Subfolders
         for index, child_folder in enumerate(folder.folders):
             is_last_folder = (
                 index == len(folder.folders) - 1
@@ -261,33 +384,47 @@ class Repository:
                 folder=child_folder,
                 prefix=child_prefix,
                 is_last=is_last_folder,
-                functions=functions
+                functions=functions,
+                summaries=summaries
             )
+
 
     def _print_file(
         self,
         file: File,
         prefix: str,
         functions: bool,
+        summaries: bool,
         connector: str = "├── "
     ):
         print(
             f"{prefix}{connector}{file.file_path.name}"
         )
 
+        if summaries and file.file_summary:
+            print(
+                f"{prefix}    Summary: {file.file_summary}"
+            )
+
         if not functions:
             return
 
         function_prefix = prefix + "    "
 
-        # Freie Funktionen
+        # Top-level functions
         for function in file.functions:
             print(
                 f"{function_prefix}├── "
                 f"{function.function_header}"
             )
 
-        # Klassen und deren Methoden
+            if summaries and function.function_summary:
+                print(
+                    f"{function_prefix}    "
+                    f"Summary: {function.function_summary}"
+                )
+
+        # Classes and their methods
         for class_index, class_ in enumerate(file.file_classes):
             is_last_class = (
                 class_index == len(file.file_classes) - 1
@@ -302,9 +439,13 @@ class Repository:
                 f"class {class_.class_name}"
             )
 
-            method_prefix = function_prefix + (
-                "    "
-            )
+            if summaries and class_.class_summary:
+                print(
+                    f"{function_prefix}    "
+                    f"Summary: {class_.class_summary}"
+                )
+
+            method_prefix = function_prefix + "    "
 
             for method_index, method in enumerate(
                 class_.class_methods
@@ -319,3 +460,109 @@ class Repository:
                     f"{method_prefix}{method_connector}"
                     f"{method.function_header}"
                 )
+
+                if summaries and method.function_summary:
+                    print(
+                        f"{method_prefix}    "
+                        f"Summary: {method.function_summary}"
+                    )
+    
+    def create_summary(self):
+        if self.ollama_client is None:
+            raise RuntimeError(
+                "OllamaClient is required to create summaries."
+            )
+
+        # --------------------------------------------------------------
+        # 1. Functions
+        # --------------------------------------------------------------
+
+        for file in self.files:
+            for function in file.functions:
+                function.create_summary(self.ollama_client)
+
+            for class_ in file.file_classes:
+                for method in class_.class_methods:
+                    method.create_summary(self.ollama_client)
+
+        # --------------------------------------------------------------
+        # 2. Classes
+        # --------------------------------------------------------------
+
+        for file in self.files:
+            for class_ in file.file_classes:
+                class_.create_summary(self.ollama_client)
+
+        # --------------------------------------------------------------
+        # 3. Files
+        # --------------------------------------------------------------
+
+        for file in self.files:
+            file.create_summary(self.ollama_client)
+
+        # --------------------------------------------------------------
+        # 4. Folders
+        # --------------------------------------------------------------
+
+        for folder in self.folders:
+            self._create_folder_summaries(folder)
+
+        # --------------------------------------------------------------
+        # 5. Repository
+        # --------------------------------------------------------------
+
+        self._create_repository_summary()
+
+    def _create_folder_summaries(self, folder: Folder):
+        for child_folder in folder.folders:
+            self._create_folder_summaries(child_folder)
+
+        for file in folder.files:
+            # The files were already summarized above.
+            pass
+
+        folder.create_summary(self.ollama_client)
+
+    def _create_repository_summary(self):
+        files = "\n".join(
+            f"- {file.file_path.name}: {file.file_summary}"
+            for file in self.files
+            if file.file_summary
+        )
+
+        folders = "\n".join(
+            self._build_folder_summary(folder)
+            for folder in self.folders
+        )
+
+        prompt = f"""
+Summarize the following software repository in a maximum of 50 words.
+
+Briefly describe the purpose of the project and its most important components.
+No introduction.
+No Markdown formatting.
+
+Repository:
+{self.repository_path.name}
+
+Files:
+{files}
+
+Folders:
+{folders}
+"""
+
+        self.repository_summary = (
+            self.ollama_client.generate(prompt)
+        )
+
+    def _build_folder_summary(self, folder: Folder) -> str:
+        result = (
+            f"- {folder.folder_path.name}/: "
+            f"{folder.folder_summary}"
+        )
+
+        for child in folder.folders:
+            result += "\n" + self._build_folder_summary(child)
+
+        return result

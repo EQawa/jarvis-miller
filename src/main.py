@@ -30,8 +30,10 @@ def main():
         model=settings.OLLAMA_MODEL
     )
     prompt_builder = PromptBuilder()
-    memory_handler = MemoryHandler(settings.REPOSITORY_PATH)
-    memory_handler.get_repository().print_repo()
+    memory_handler = MemoryHandler(settings.REPOSITORY_PATH, ollama_client=ollama_client)
+    print("Now add description")
+    memory_handler.get_repository().create_summary()
+    memory_handler.get_repository().print_repo(functions=True, summaries=True)
 
     while True:
 
